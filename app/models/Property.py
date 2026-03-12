@@ -15,7 +15,7 @@ class PropiedadBase(BaseModel):
     url_imagen:Optional[str]=None
 
     precio_original: Decimal = Field(..., max_digits=12, decimal_places=2)
-    tipo_moneda: str = Field(..., min_length=3, max_length=3)  # 'BOB' o 'USD'
+    tipo_moneda: str = Field(..., min_length=3, max_length=3)  
 
     precio_bob: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     precio_usd: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
@@ -26,3 +26,4 @@ class PropiedadBase(BaseModel):
 
     id_zona: int
     id_tipo_propiedad: int
+    
