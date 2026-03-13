@@ -27,6 +27,26 @@ class PropiedadBase(BaseModel):
     id_tipo_propiedad: int
 
 
+
+class PropiedadCreate(BaseModel):
+
+    nombre_propiedad: str
+    descripcion: Optional[str]
+    direccion: Optional[str]
+
+    latitud: float
+    longitud: float
+
+    construccion_m2: Decimal
+    terreno_m2: Decimal
+
+    precio_original: Decimal
+    tipo_moneda: str
+    cambio_utilizado: Decimal
+
+    id_zona: int
+    id_tipo_propiedad: int
+
 class PropiedadResponse(PropiedadBase):
     id_propiedad: int
 

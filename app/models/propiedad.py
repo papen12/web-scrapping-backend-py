@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Numeric, Text
 from app.db.supabase import Base
+from geoalchemy2 import Geometry
 
 class Propiedad(Base):
     __tablename__ = "propiedad"
@@ -9,7 +10,7 @@ class Propiedad(Base):
     nombre_propiedad = Column(String(255))
     descripcion = Column(Text)
     direccion = Column(String)
-    ubicacion_geografica = Column(String)
+    ubicacion_geografica = Column(Geometry("POINT", srid=4326))
 
     construccion_m2 = Column(Numeric(10,2))
     terreno_m2 = Column(Numeric(10,2))
@@ -28,3 +29,6 @@ class Propiedad(Base):
 
     id_zona = Column(Integer)
     id_tipo_propiedad = Column(Integer)
+    
+    
+
