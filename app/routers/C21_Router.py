@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 import httpx
 from decimal import Decimal, ROUND_HALF_UP
-from app.schemas.Property import PropiedadBase
+from app.models.Property import PropiedadBase
 from app.db.supabase import *
 from sqlalchemy.orm import Session
 from sqlalchemy import text

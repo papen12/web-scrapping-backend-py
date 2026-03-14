@@ -1,12 +1,15 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from decimal import Decimal
+from typing import List
 
 class PropiedadBase(BaseModel):
     nombre_propiedad: str
     descripcion: Optional[str] = None
     direccion: Optional[str] = None
-    ubicacion_geografica: Optional[str] = None
+
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
 
     construccion_m2: Decimal
     terreno_m2: Decimal
@@ -25,6 +28,7 @@ class PropiedadBase(BaseModel):
 
     id_zona: int
     id_tipo_propiedad: int
+
 
 
 
@@ -52,3 +56,25 @@ class PropiedadResponse(PropiedadBase):
 
     class Config:
         from_attributes = True
+        
+        
+class PropiedadUpdate(BaseModel):
+
+    nombre_propiedad: str
+    descripcion: Optional[str]
+    direccion: Optional[str]
+
+    construccion_m2: Decimal
+    terreno_m2: Decimal
+
+    precio_original: Decimal
+    tipo_moneda: str
+    cambio_utilizado: Decimal
+
+    id_zona: int
+    id_tipo_propiedad: int
+    
+    
+class FiltroBusqueda(BaseModel):
+    tipos: List[int]
+    zonas: List[int]
