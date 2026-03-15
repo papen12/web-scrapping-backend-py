@@ -5,6 +5,9 @@ from app.db.supabase import get_db
 from app.models.Property import PropiedadCreate,PropiedadResponse,PropiedadUpdate,FiltroBusqueda
 from typing import List
 
+
+from app.models.Kriging import Propiedad_Encontrada,PuntoSeleccionado
+
 property_router = APIRouter(prefix="/propiedades", tags=["Propiedades"])
 
 @property_router.get("/", response_model=list[PropiedadResponse])
@@ -197,5 +200,22 @@ def buscar_propiedades(filtro: FiltroBusqueda, db: Session = Depends(get_db)):
     })
 
     propiedades = result.mappings().all()
+
+    return propiedades
+
+
+@property_router.post("/cercanas", response_model=list[Propiedad_Encontrada])
+def PropiedadesCercanas(punto_seleccionado: PuntoSeleccionado, db: Session = Depends(get_db)):
+    query = text("""
+        SELECT *
+        FROM public.propiedades_cercanas(:lat, :lon, :radio)
+    """)
+    
+    result = db.execute(query, {
+        "lat": punto_seleccionado.latitud,
+        "lon": punto_seleccionado.longitud,
+        "radio": punto_seleccionado.radio
+    })
+    propiedades = [dict(row) for row in result.mappings().all()]
 
     return propiedades
