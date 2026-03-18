@@ -22,104 +22,142 @@ async def cargar_puntos_interes(db: Session = Depends(get_db)):
     tipo_map = {t.nombre_tipo: t.id_tipo_punto_interes for t in tipos}
 
     osm_map = {
-        "colegio": ('amenity', 'school'),
-        "universidad": ('amenity', 'university'),
-        "hospital": ('amenity', 'hospital'),
-        "clinica": ('amenity', 'clinic'),
-        "centro de salud": ('amenity', 'healthcare'),
-        "farmacia": ('amenity', 'pharmacy'),
-        "mercado": ('amenity', 'marketplace'),
-        "supermercado": ('shop', 'supermarket'),
-        "banco": ('amenity', 'bank'),
-        "cajero automatico": ('amenity', 'atm'),
-        "parque": ('leisure', 'park'),
-        "plaza": ('place', 'square'),
-        "centro comercial": ('shop', 'mall'),
-        "restaurante": ('amenity', 'restaurant'),
-        "transporte publico": ('highway', 'bus_stop'),
-        "estacion de bus": ('amenity', 'bus_station'),
-        "aeropuerto": ('aeroway', 'aerodrome'),
-        "policia": ('amenity', 'police'),
-        "bomberos": ('amenity', 'fire_station'),
-        "iglesia": ('amenity', 'place_of_worship'),
-        "gimnasio": ('leisure', 'fitness_centre'),
-        "estadio": ('leisure', 'stadium'),
-        "biblioteca": ('amenity', 'library'),
-        "museo": ('tourism', 'museum'),
-        "hotel": ('tourism', 'hotel'),
+        ("amenity", "school"): "colegio",
+        ("amenity", "university"): "universidad",
+        ("amenity", "hospital"): "hospital",
+        ("amenity", "clinic"): "clinica",
+        ("amenity", "healthcare"): "centro de salud",
+        ("amenity", "pharmacy"): "farmacia",
+        ("amenity", "marketplace"): "mercado",
+        ("shop", "supermarket"): "supermercado",
+        ("amenity", "bank"): "banco",
+        ("amenity", "atm"): "cajero automatico",
+        ("leisure", "park"): "parque",
+        ("place", "square"): "plaza",
+        ("shop", "mall"): "centro comercial",
+        ("amenity", "restaurant"): "restaurante",
+        ("highway", "bus_stop"): "transporte publico",
+        ("amenity", "bus_station"): "estacion de bus",
+        ("aeroway", "aerodrome"): "aeropuerto",
+        ("amenity", "police"): "policia",
+        ("amenity", "fire_station"): "bomberos",
+        ("amenity", "place_of_worship"): "iglesia",
+        ("leisure", "fitness_centre"): "gimnasio",
+        ("leisure", "stadium"): "estadio",
+        ("amenity", "library"): "biblioteca",
+        ("tourism", "museum"): "museo",
+        ("tourism", "hotel"): "hotel"
     }
 
     bbox = "(-17.50,-66.30,-17.30,-66.05)"
     overpass_url = "https://overpass-api.de/api/interpreter"
 
+    filtros = []
+    for (k, v) in osm_map.keys():
+        filtros.append(f'node["{k}"="{v}"]{bbox};')
+        filtros.append(f'way["{k}"="{v}"]{bbox};')
+        filtros.append(f'relation["{k}"="{v}"]{bbox};')
+
+    query = f"""
+    [out:json][timeout:120];
+    (
+        {"".join(filtros)}
+    );
+    out center;
+    """
+
     insertados = 0
     omitidos = 0
-    for tipo_nombre, (key, value) in osm_map.items():
+    vistos = set()
 
-        query = f"""
-        [out:json][timeout:90];
-        node["{key}"="{value}"]{bbox};
-        out body;
-        """
+    try:
+        response = requests.get(overpass_url, params={"data": query})
 
-        try:
-            response = requests.get(overpass_url, params={"data": query})
+        if response.status_code != 200:
+            return {"mensaje": "Error en Overpass", "insertados": 0, "omitidos": 0}
 
-            if response.status_code != 200:
-                print(f"Error en {tipo_nombre}: {response.status_code}")
+        data = response.json()
+
+        for elemento in data.get("elements", []):
+
+            tags = elemento.get("tags", {})
+            nombre = tags.get("name")
+
+            if not nombre:
+                omitidos += 1
                 continue
 
-            data = response.json()
+            lat = elemento.get("lat")
+            lon = elemento.get("lon")
 
-            for elemento in data.get("elements", []):
+            if not lat or not lon:
+                center = elemento.get("center")
+                if center:
+                    lat = center.get("lat")
+                    lon = center.get("lon")
 
-                lat = elemento.get("lat")
-                lon = elemento.get("lon")
+            if not lat or not lon:
+                omitidos += 1
+                continue
 
-                if not lat or not lon:
-                    omitidos += 1
-                    continue
+            key = None
+            value = None
 
-                tags = elemento.get("tags", {})
-                nombre = tags.get("name", "Sin nombre")
+            for (k, v) in osm_map.keys():
+                if tags.get(k) == v:
+                    key = k
+                    value = v
+                    break
 
-                id_tipo = tipo_map.get(tipo_nombre)
+            if not key:
+                omitidos += 1
+                continue
 
-                if not id_tipo:
-                    omitidos += 1
-                    continue
+            tipo_nombre = osm_map.get((key, value))
+            id_tipo = tipo_map.get(tipo_nombre)
 
-                try:
-                    db.execute(
-                        text("""
-                        INSERT INTO punto_interes
-                        (nombre, ubicacion_geografica, id_tipo_punto_interes)
-                        VALUES (
-                            :nombre,
-                            postgis.ST_SetSRID(
-                                postgis.ST_MakePoint(:lon, :lat),
-                                4326
-                            ),
-                            :id_tipo
-                        )
-                        ON CONFLICT DO NOTHING
-                        """),
-                        {
-                            "nombre": nombre,
-                            "lat": lat,
-                            "lon": lon,
-                            "id_tipo": id_tipo
-                        }
+            if not id_tipo:
+                omitidos += 1
+                continue
+
+            hash_unico = f"{nombre}_{round(lat,6)}_{round(lon,6)}"
+
+            if hash_unico in vistos:
+                omitidos += 1
+                continue
+
+            vistos.add(hash_unico)
+
+            try:
+                db.execute(
+                    text("""
+                    INSERT INTO punto_interes
+                    (nombre, ubicacion_geografica, id_tipo_punto_interes)
+                    VALUES (
+                        :nombre,
+                        postgis.ST_SetSRID(
+                            postgis.ST_MakePoint(:lon, :lat),
+                            4326
+                        ),
+                        :id_tipo
                     )
+                    ON CONFLICT DO NOTHING
+                    """),
+                    {
+                        "nombre": nombre,
+                        "lat": lat,
+                        "lon": lon,
+                        "id_tipo": id_tipo
+                    }
+                )
 
-                    insertados += 1
+                insertados += 1
 
-                except Exception:
-                    omitidos += 1
-            sleep(1)
+            except Exception:
+                omitidos += 1
 
-        except Exception as e:
-            print(f"Error en request {tipo_nombre}: {e}")
+    except Exception as e:
+        return {"mensaje": f"Error: {str(e)}", "insertados": 0, "omitidos": 0}
 
     db.commit()
 
@@ -128,7 +166,6 @@ async def cargar_puntos_interes(db: Session = Depends(get_db)):
         "insertados": insertados,
         "omitidos": omitidos
     }
-    
 @interest_point_router.get("/", response_model=list[PuntoInteres])
 def obtener_puntos_interes(db: Session = Depends(get_db)):
     
