@@ -483,3 +483,139 @@ async def sync_propiedades_tiquipaya(
     
 
 
+@remax_router.post("/post-colcapirhua")
+async def sync_casas_colcapirhua(
+    db: Session = Depends(get_db)
+):
+
+    url = "https://remax.bo/api/search/casa/cochabamba/colcapirhua"
+
+    total_insertadas = 0
+
+    insert_query = text("""
+        INSERT INTO propiedad (
+            nombre_propiedad,
+            descripcion,
+            direccion,
+            ubicacion_geografica,
+            construccion_m2,
+            terreno_m2,
+            precio_original,
+            tipo_moneda,
+            url_imagen,
+            precio_bob,
+            precio_usd,
+            cambio_utilizado,
+            precio_m2_bob,
+            precio_m2_usd,
+            id_zona,
+            id_tipo_propiedad
+        )
+        VALUES (
+            :nombre_propiedad,
+            :descripcion,
+            :direccion,
+            CASE
+                WHEN :point IS NULL THEN NULL
+                ELSE postgis.ST_GeomFromText(:point, 4326)
+            END,
+            :construccion_m2,
+            :terreno_m2,
+            :precio_original,
+            :tipo_moneda,
+            :url_imagen,
+            :precio_bob,
+            :precio_usd,
+            :cambio_utilizado,
+            :precio_m2_bob,
+            :precio_m2_usd,
+            :id_zona,
+            :id_tipo_propiedad
+        )
+        ON CONFLICT (nombre_propiedad) DO NOTHING
+    """)
+
+    params = {
+        "order[]": [1, 3],
+        "page": 1,
+        "swLat": -17.470537548710915,
+        "swLng": -66.43844604492189,
+        "neLat": -17.286397793949188,
+        "neLng": -66.03195190429689
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+
+        response = await client.get(url, params=params)
+        result = response.json()
+
+        propiedades = result.get("data", [])
+
+        for item in propiedades:
+
+            if item.get("transaction_type", {}).get("name") != "Venta":
+                continue
+
+            listing = item.get("listing_information") or {}
+            location = item.get("location") or {}
+            price = item.get("price") or {}
+            default_imagen = item.get("default_imagen") or {}
+
+            slug = item.get("slug")
+
+            descripcion = listing.get("subtype_property", {}).get("name")
+
+            direccion = location.get("first_address")
+
+            url_imagen = default_imagen.get("url")
+
+            latitud = location.get("latitude")
+            longitud = location.get("longitude")
+
+            point = None
+            if latitud and longitud:
+                point = f"POINT({float(longitud)} {float(latitud)})"
+
+            construccion_m2 = Decimal(
+                listing.get("construction_area_m", 0)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            terreno_m2 = Decimal(
+                listing.get("land_m2", 0)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            precio_original = Decimal(
+                price.get("amount", 0)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            precio_usd = Decimal(
+                price.get("price_in_dollars", 0)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            db.execute(insert_query, {
+                "nombre_propiedad": slug,
+                "descripcion": descripcion,
+                "direccion": direccion,
+                "point": point,
+                "construccion_m2": construccion_m2,
+                "terreno_m2": terreno_m2,
+                "precio_original": precio_original,
+                "tipo_moneda": "BOB",
+                "url_imagen": url_imagen,
+                "precio_bob": precio_original,
+                "precio_usd": precio_usd,
+                "cambio_utilizado": Decimal("6.86"),
+                "precio_m2_bob": None,
+                "precio_m2_usd": None,
+                "id_zona": 6,
+                "id_tipo_propiedad": 2
+            })
+
+            total_insertadas += 1
+
+        db.commit()
+
+    return {
+        "message": "Casas de Colcapirhua sincronizadas",
+        "total_insertadas": total_insertadas
+    }
