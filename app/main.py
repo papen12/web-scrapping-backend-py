@@ -1,6 +1,7 @@
 from fastapi import FastAPI
-from app.routers import C21_Router,Remax_Router,Property_Router,Interest_Point_Router
+from app.routers import C21_Router, Kriging_Router,Remax_Router,Property_Router,Interest_Point_Router
 from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 
@@ -21,3 +22,4 @@ app.include_router(C21_Router.c21_router)
 app.include_router(Remax_Router.remax_router)
 app.include_router(Property_Router.property_router)
 app.include_router(Interest_Point_Router.interest_point_router)
+app.include_router(Kriging_Router.kriging_router)

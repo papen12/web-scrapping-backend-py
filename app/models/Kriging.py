@@ -1,6 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel
 from decimal import Decimal
+from typing import List
 
 class PuntoSeleccionado(BaseModel):
     latitud: float
@@ -31,3 +32,7 @@ class Propiedad_Encontrada(BaseModel):
     id_tipo_propiedad: int
     
     
+
+class RequestKriging(BaseModel):
+    punto: PuntoSeleccionado
+    propiedades: List[Propiedad_Encontrada]
