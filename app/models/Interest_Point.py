@@ -10,12 +10,8 @@ class PuntoInteresBase(BaseModel):
 
 class PuntoInteresCreate(PuntoInteresBase):
     pass
-
-
 class PuntoInteres(PuntoInteresBase):
     id_punto_interes: int
-
-
 class PuntoSeleccionado(BaseModel):
     latitud: float
     longitud: float
