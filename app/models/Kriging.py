@@ -34,19 +34,13 @@ class Propiedad_Encontrada(BaseModel):
     
 class PropiedadKriging(BaseModel):
     id_propiedad: int
-
     latitud: float
     longitud: float
-
     precio_m2_usd: Decimal = Field(gt=0)
-
     id_zona: int
     id_tipo_propiedad: int
-
     terreno_m2: Optional[Decimal] = None
     distancia_metros: Optional[float] = None
-
-
 class RequestKriging(BaseModel):
     punto: PuntoSeleccionado
     propiedades: List[PropiedadKriging]
