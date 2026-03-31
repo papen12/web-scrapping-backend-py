@@ -4,8 +4,6 @@ from sqlalchemy import text
 from app.db.supabase import get_db
 from app.models.Property import PropiedadCreate,PropiedadResponse,PropiedadUpdate,FiltroBusqueda
 from typing import List
-
-
 from app.models.Kriging import Propiedad_Encontrada,PuntoSeleccionado
 
 property_router = APIRouter(prefix="/propiedades", tags=["Propiedades"])
@@ -19,6 +17,18 @@ def getproperties(db: Session = Depends(get_db)):
     propiedades = result.mappings().all()
 
     return propiedades
+
+@property_router.get("/mapa/{id_tipo}", response_model=List[PropiedadResponse])
+def obtener_propiedades_mapa(id_tipo: int, db: Session = Depends(get_db)):
+
+    query = text("SELECT * FROM filtro_tipo_propiedad(:id_tipo)")
+
+    result = db.execute(query, {"id_tipo": id_tipo})
+    propiedades = result.mappings().all()
+
+    return propiedades
+
+
 
 @property_router.get("/{propiedad_id}", response_model=PropiedadResponse)
 def obtener_propiedad(propiedad_id: int, db: Session = Depends(get_db)):
