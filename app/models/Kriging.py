@@ -7,6 +7,7 @@ class PuntoSeleccionado(BaseModel):
     latitud: float
     longitud: float
     radio: int = 1000  
+    id_tipo_propiedad: int
     
 
 class Propiedad_Encontrada(BaseModel):

@@ -215,17 +215,22 @@ def buscar_propiedades(filtro: FiltroBusqueda, db: Session = Depends(get_db)):
 
 
 @property_router.post("/cercanas", response_model=list[Propiedad_Encontrada])
-def PropiedadesCercanas(punto_seleccionado: PuntoSeleccionado, db: Session = Depends(get_db)):
+def encontrar_propiedades_kriging_endpoint(
+    punto_seleccionado: PuntoSeleccionado,
+    db: Session = Depends(get_db)
+):
     query = text("""
         SELECT *
-        FROM public.propiedades_cercanas(:lat, :lon, :radio)
+        FROM public.encontrar_propiedades_kriging(:lat, :lon, :tipo, :radio)
     """)
     
     result = db.execute(query, {
         "lat": punto_seleccionado.latitud,
         "lon": punto_seleccionado.longitud,
+        "tipo": punto_seleccionado.id_tipo_propiedad,
         "radio": punto_seleccionado.radio
     })
+
     propiedades = [dict(row) for row in result.mappings().all()]
 
     return propiedades
