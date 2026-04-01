@@ -5,9 +5,46 @@ from app.models.Property import PropiedadBase
 from app.db.supabase import *
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import asyncio
+import math
 
 
 remax_router=APIRouter(prefix="/remax")
+
+
+BASE_URL = "https://remax.bo/api/search/comercialnegocio-o-local-comercial-o-quinta-o-casa-de-calidad-o-galpon-o-oficina-o-clinica-de-salud-o-hoteledificio-de-apartamentos-o-propiedad-agricolaganadera-o-terreno-o-terreno-comercial-o-edificioconstruccion-o-edificio-o-departamento-o-duplex-o-estudiomonoambiente-o-casa-o-apartamento-con-servicio-de-hotel-o-baulera-o-condominio-departamento-o-penthouse-o-garajebaulera-o-edificio-de-apartamentos-entero-o-otros-o-casa-con-espacio-comercial-o-casa-de-campo/cochabamba/tiquipaya-o-colcapirhua"
+
+COMMON_PARAMS = {
+    "min_price": 0,
+    "order[]": [1, 3],
+    "swLat": -19.24632927300332,
+    "swLng": -66.81060791015626,
+    "neLat": -15.895300855260103,
+    "neLng": -65.74493408203126,
+}
+
+@remax_router.get("/count-all-properties")
+async def count_all_properties():
+    total_count = 0
+    page = 1
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        while True:
+            params = COMMON_PARAMS.copy()
+            params["page"] = page
+
+            response = await client.get(BASE_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            properties = data.get("data", [])
+            if not properties:
+                break
+
+            total_count += len(properties)
+            page += 1
+
+    return {"total_properties": total_count}
 
 @remax_router.get("/ver")
 async def GetPropiedadesRemax():
@@ -482,15 +519,26 @@ async def sync_propiedades_tiquipaya(
     
     
 
-
-@remax_router.post("/post-colcapirhua")
-async def sync_casas_colcapirhua(
+@remax_router.post("/post-all")
+def sync_all_propiedades_remax(
     db: Session = Depends(get_db)
 ):
+    url = BASE_URL
 
-    url = "https://remax.bo/api/search/casa/cochabamba/colcapirhua"
-
+    page = 1
     total_insertadas = 0
+
+    zonas = {
+        row.nombre_zona: row.id_zona
+        for row in db.execute(text("SELECT id_zona, nombre_zona FROM zona"))
+    }
+
+    tipos = {
+        row.nombre_tipo_propiedad: row.id_tipo_propiedad
+        for row in db.execute(text("SELECT id_tipo_propiedad, nombre_tipo_propiedad FROM tipo_propiedad"))
+    }
+
+    id_tipo_default = tipos.get("Otros")
 
     insert_query = text("""
         INSERT INTO propiedad (
@@ -503,11 +551,7 @@ async def sync_casas_colcapirhua(
             precio_original,
             tipo_moneda,
             url_imagen,
-            precio_bob,
-            precio_usd,
             cambio_utilizado,
-            precio_m2_bob,
-            precio_m2_usd,
             id_zona,
             id_tipo_propiedad
         )
@@ -524,98 +568,110 @@ async def sync_casas_colcapirhua(
             :precio_original,
             :tipo_moneda,
             :url_imagen,
-            :precio_bob,
-            :precio_usd,
             :cambio_utilizado,
-            :precio_m2_bob,
-            :precio_m2_usd,
             :id_zona,
             :id_tipo_propiedad
         )
         ON CONFLICT (nombre_propiedad) DO NOTHING
     """)
 
-    params = {
-        "order[]": [1, 3],
-        "page": 1,
-        "swLat": -17.470537548710915,
-        "swLng": -66.43844604492189,
-        "neLat": -17.286397793949188,
-        "neLng": -66.03195190429689
-    }
+    with httpx.Client(timeout=60.0) as client:
+        while True:
+            params = COMMON_PARAMS.copy()
+            params["page"] = page
 
-    async with httpx.AsyncClient(timeout=30) as client:
+            response = client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
 
-        response = await client.get(url, params=params)
-        result = response.json()
+            propiedades = data.get("data", [])
+            if not propiedades:
+                break
 
-        propiedades = result.get("data", [])
+            for item in propiedades:
+                try:
+                    if item.get("transaction_type", {}).get("name") != "Venta":
+                        continue
 
-        for item in propiedades:
+                    slug = item.get("slug")
 
-            if item.get("transaction_type", {}).get("name") != "Venta":
-                continue
+                    descripcion = item.get(
+                        "listing_information", {}
+                    ).get("subtype_property", {}).get("name")
 
-            listing = item.get("listing_information") or {}
-            location = item.get("location") or {}
-            price = item.get("price") or {}
-            default_imagen = item.get("default_imagen") or {}
+                    direccion = item.get(
+                        "location", {}
+                    ).get("first_address")
 
-            slug = item.get("slug")
+                    url_imagen = item.get(
+                        "default_imagen", {}
+                    ).get("url")
 
-            descripcion = listing.get("subtype_property", {}).get("name")
+                    latitud = item.get("location", {}).get("latitude")
+                    longitud = item.get("location", {}).get("longitude")
 
-            direccion = location.get("first_address")
+                    point = None
+                    if latitud is not None and longitud is not None:
+                        point = f"POINT({float(longitud)} {float(latitud)})"
 
-            url_imagen = default_imagen.get("url")
+                    terreno_m2 = Decimal(
+                        item.get("listing_information", {}).get("land_m2", 0)
+                    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            latitud = location.get("latitude")
-            longitud = location.get("longitude")
+                    precio_original = Decimal(
+                        item.get("price", {}).get("amount", 0)
+                    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            point = None
-            if latitud and longitud:
-                point = f"POINT({float(longitud)} {float(latitud)})"
+                    nombre_zona = item.get(
+                        "location", {}
+                    ).get("zone", {}).get("name")
 
-            construccion_m2 = Decimal(
-                listing.get("construction_area_m", 0)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    id_zona = zonas.get(nombre_zona)
 
-            terreno_m2 = Decimal(
-                listing.get("land_m2", 0)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    if not id_zona and nombre_zona:
+                        result = db.execute(
+                            text("""
+                                INSERT INTO zona (nombre_zona)
+                                VALUES (:nombre)
+                                RETURNING id_zona
+                            """),
+                            {"nombre": nombre_zona}
+                        ).fetchone()
 
-            precio_original = Decimal(
-                price.get("amount", 0)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                        id_zona = result[0]
+                        zonas[nombre_zona] = id_zona
 
-            precio_usd = Decimal(
-                price.get("price_in_dollars", 0)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    tipo_nombre = descripcion
 
-            db.execute(insert_query, {
-                "nombre_propiedad": slug,
-                "descripcion": descripcion,
-                "direccion": direccion,
-                "point": point,
-                "construccion_m2": construccion_m2,
-                "terreno_m2": terreno_m2,
-                "precio_original": precio_original,
-                "tipo_moneda": "BOB",
-                "url_imagen": url_imagen,
-                "precio_bob": precio_original,
-                "precio_usd": precio_usd,
-                "cambio_utilizado": Decimal("6.86"),
-                "precio_m2_bob": None,
-                "precio_m2_usd": None,
-                "id_zona": 6,
-                "id_tipo_propiedad": 2
-            })
+                    id_tipo = tipos.get(tipo_nombre, id_tipo_default)
 
-            total_insertadas += 1
+                    db.execute(insert_query, {
+                        "nombre_propiedad": slug,
+                        "descripcion": descripcion,
+                        "direccion": direccion,
+                        "point": point,
+                        "construccion_m2": Decimal(0),
+                        "terreno_m2": terreno_m2,
+                        "precio_original": precio_original,
+                        "tipo_moneda": "BOB",
+                        "url_imagen": url_imagen,
+                        "cambio_utilizado": Decimal("6.86"),
+                        "id_zona": id_zona,
+                        "id_tipo_propiedad": id_tipo
+                    })
 
-        db.commit()
+                    total_insertadas += 1
+
+                except Exception as e:
+                    print(f"Error: {e}")
+                    continue
+
+            db.commit()
+            print(f"Página {page} procesada")
+            page += 1
 
     return {
-        "message": "Casas de Colcapirhua sincronizadas",
-        "total_insertadas": total_insertadas
+        "message": "Sincronización completa",
+        "total_insertadas": total_insertadas,
+        "paginas": page - 1
     }

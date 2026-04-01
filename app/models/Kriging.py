@@ -8,6 +8,11 @@ class PuntoSeleccionado(BaseModel):
     longitud: float
     radio: int = 1000  
     id_tipo_propiedad: int
+
+class PuntoSeleccionadoKriging(BaseModel):
+    latitud: float
+    longitud: float
+    radio: int = 1000  
     
 
 class Propiedad_Encontrada(BaseModel):
@@ -43,5 +48,5 @@ class PropiedadKriging(BaseModel):
     terreno_m2: Optional[Decimal] = None
     distancia_metros: Optional[float] = None
 class RequestKriging(BaseModel):
-    punto: PuntoSeleccionado
+    punto: PuntoSeleccionadoKriging
     propiedades: List[PropiedadKriging]

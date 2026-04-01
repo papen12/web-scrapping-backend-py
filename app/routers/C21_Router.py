@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 
-c21_router = APIRouter(prefix="/c21", tags=["Propiedades Remax"])
+c21_router = APIRouter(prefix="/c21", tags=["Propiedades C21"])
     
     
 @c21_router.get("/ver")
