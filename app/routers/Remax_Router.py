@@ -9,7 +9,7 @@ import asyncio
 import math
 
 
-remax_router=APIRouter(prefix="/remax")
+remax_router=APIRouter(prefix="/remax",tags=["Propiedades Remax"])
 
 
 BASE_URL = "https://remax.bo/api/search/comercialnegocio-o-local-comercial-o-quinta-o-casa-de-calidad-o-galpon-o-oficina-o-clinica-de-salud-o-hoteledificio-de-apartamentos-o-propiedad-agricolaganadera-o-terreno-o-terreno-comercial-o-edificioconstruccion-o-edificio-o-departamento-o-duplex-o-estudiomonoambiente-o-casa-o-apartamento-con-servicio-de-hotel-o-baulera-o-condominio-departamento-o-penthouse-o-garajebaulera-o-edificio-de-apartamentos-entero-o-otros-o-casa-con-espacio-comercial-o-casa-de-campo/cochabamba/tiquipaya-o-colcapirhua"

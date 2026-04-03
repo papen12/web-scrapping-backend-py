@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import C21_Router, Kriging_Router, Map_Resources_Router,Remax_Router,Property_Router,Interest_Point_Router
+from app.routers import C21_Router, Kriging_Router, Map_Resources_Router,Remax_Router,Property_Router,Interest_Point_Router,Infocasas_Router
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -24,3 +24,4 @@ app.include_router(Property_Router.property_router)
 app.include_router(Interest_Point_Router.interest_point_router)
 app.include_router(Kriging_Router.kriging_router)
 app.include_router(Map_Resources_Router.map_resources_router)
+app.include_router(Infocasas_Router.infocasas_router)
